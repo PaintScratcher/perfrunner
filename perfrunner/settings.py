@@ -476,6 +476,7 @@ class PhaseSettings(object):
                                              self.QUERY_WORKERS))
         self.n1ql_workers = int(options.get('n1ql_workers',
                                             self.N1QL_WORKERS))
+        self.clients_per_cluster = options.get('clients_per_cluster')
         self.dcp_workers = int(options.get('dcp_workers', self.DCP_WORKERS))
 
         self.n1ql_queries = []

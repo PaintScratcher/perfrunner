@@ -58,6 +58,36 @@ class RemoteWorkerManager(object):
     RACE_DELAY = 2
 
     def __init__(self, cluster_spec, test_config, remote):
+        def client_config_generator(self):
+
+            default_config = zip(self.cluster_spec.workers,
+                        self.cluster_spec.yield_masters())
+
+            if not test_config.load_settings.clients_per_cluster:
+                return default_config
+
+            clients_per_cluster = [int(clients) for clients in test_config
+                                    .load_settings.clients_per_cluster.split()]
+
+            if len(clients_per_cluster) != len(cluster_spec.config.items('clusters')):
+                logger.warning("There number of clusters and clusters specified "
+                            "in the clients_per_cluster test config do not match - "
+                            "disabling multiple clients per cluster.")
+                return default_config
+            if sum(clients_per_cluster) > len(cluster_spec.workers):
+                logger.warning("More clients_per_cluster specified in test config"
+                                "than are avaliable - disabling multiple clients "
+                                "per cluster.")
+                return default_config
+
+            cluster_config = []
+            workers_not_assigned = self.cluster_spec.workers
+            for master, number_of_clients in zip(self.cluster_spec.yield_masters(),
+                                                    clients_per_cluster):
+                for x in range(number_of_clients):
+                    cluster_config.append((workers_not_assigned.pop(0), master))
+            return cluster_config
+
         self.cluster_spec = cluster_spec
         self.buckets = test_config.buckets or test_config.max_buckets
         self.remote = remote
@@ -65,18 +95,19 @@ class RemoteWorkerManager(object):
         self.reuse_worker = test_config.worker_settings.reuse_worker
         self.temp_dir = test_config.worker_settings.worker_dir
         self.user, self.password = cluster_spec.client_credentials
+        self.client_config = client_config_generator(self)
+        print self.client_config
         with settings(user=self.user, password=self.password):
             self.initialize_project()
             self.start()
 
     def initialize_project(self):
-        for worker, master in zip(self.cluster_spec.workers,
-                                  self.cluster_spec.yield_masters()):
+        for worker, master in self.client_config:
             state.env.host_string = worker
             run('killall -9 celery', quiet=True)
             for bucket in self.buckets:
-                logger.info('Intializing remote worker environment')
-
+                logger.info('Intializing remote worker environment on {}'
+                                .format(worker))
                 qname = '{}-{}'.format(master.split(':')[0], bucket)
                 temp_dir = '{}-{}'.format(self.temp_dir, qname)
 
@@ -98,8 +129,7 @@ class RemoteWorkerManager(object):
                         '--download-cache /tmp/pip -r requirements.txt')
 
     def start(self):
-        for worker, master in zip(self.cluster_spec.workers,
-                                  self.cluster_spec.yield_masters()):
+        for worker, master in self.client_config:
             state.env.host_string = worker
             for bucket in self.buckets:
                 qname = '{}-{}'.format(master.split(':')[0], bucket)
@@ -115,24 +145,25 @@ class RemoteWorkerManager(object):
                      run_workload=task_run_workload):
         self.workers = []
         for target in target_iterator:
-            logger.info('Running workload generator')
+            for client, master in self.client_config:
+                print "Target Node: {}, Client: {}, Master: {}".format(target.node, client, master)
+                if target.node == master:
+                    logger.info('Running workload generator')
 
-            qname = '{}-{}'.format(target.node.split(':')[0], target.bucket)
-            queue = Queue(name=qname)
-            worker = run_workload.apply_async(
-                args=(settings, target, timer),
-                queue=queue.name, expires=timer,
-            )
-            self.workers.append(worker)
-            sleep(self.RACE_DELAY)
-
+                    qname = '{}-{}'.format(target.node.split(':')[0], target.bucket)
+                    queue = Queue(name=qname)
+                    worker = task_run_workload.apply_async(
+                        args=(settings, target, timer),
+                        queue=queue.name, expires=timer,
+                    )
+                    self.workers.append(worker)
+                    sleep(self.RACE_DELAY)
     def wait_for_workers(self):
         for worker in self.workers:
             worker.wait()
 
     def terminate(self):
-        for worker, master in zip(self.cluster_spec.workers,
-                                  self.cluster_spec.yield_masters()):
+        for worker, master in self.client_config:
             state.env.host_string = worker
             for bucket in self.buckets:
                 with settings(user=self.user, password=self.password):
