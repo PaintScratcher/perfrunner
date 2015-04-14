@@ -4,6 +4,7 @@ from time import sleep
 from celery import Celery
 from fabric import state
 from fabric.api import cd, run, local, settings, quiet
+from itertools import cycle
 from kombu import Queue
 from logger import logger
 from spring.wgen import WorkloadGen
@@ -53,11 +54,11 @@ class RemoteWorkerManager(object):
 
     def initialize_project(self):
         for worker, master in zip(self.cluster_spec.workers,
-                                  self.cluster_spec.yield_masters()):
+                                   cycle(self.cluster_spec.yield_masters())):
             state.env.host_string = worker
             run('killall -9 celery', quiet=True)
             for bucket in self.buckets:
-                logger.info('Intializing remote worker environment')
+                logger.info('Intializing remote worker environment on {}'.format(worker))
 
                 qname = '{}-{}'.format(master.split(':')[0], bucket)
                 temp_dir = '{}-{}'.format(self.temp_dir, qname)
@@ -80,7 +81,7 @@ class RemoteWorkerManager(object):
 
     def start(self):
         for worker, master in zip(self.cluster_spec.workers,
-                                  self.cluster_spec.yield_masters()):
+                                  cycle(self.cluster_spec.yield_masters())):
             state.env.host_string = worker
             for bucket in self.buckets:
                 qname = '{}-{}'.format(master.split(':')[0], bucket)
@@ -112,7 +113,7 @@ class RemoteWorkerManager(object):
 
     def terminate(self):
         for worker, master in zip(self.cluster_spec.workers,
-                                  self.cluster_spec.yield_masters()):
+                                  cycle(self.cluster_spec.yield_masters())):
             state.env.host_string = worker
             for bucket in self.buckets:
                 with settings(user=self.user, password=self.password):
