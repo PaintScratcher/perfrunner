@@ -418,6 +418,7 @@ class PhaseSettings(object):
         self.workers = int(options.get('workers', self.WORKERS))
         self.query_workers = int(options.get('query_workers',
                                              self.QUERY_WORKERS))
+        self.clients_per_cluster = options.get('clients_per_cluster')
         self.dcp_workers = int(options.get('dcp_workers', self.DCP_WORKERS))
 
         self.seq_reads = self.SEQ_READS
