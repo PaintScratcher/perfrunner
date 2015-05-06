@@ -11,6 +11,7 @@ from sqlalchemy import create_engine
 
 from perfrunner import celerylocal, celeryremote
 from perfrunner.settings import REPO
+from perfrunner.workloads.pillowfight import Pillowfight
 
 
 celery = Celery('workers')
@@ -25,6 +26,22 @@ else:
 def task_run_workload(settings, target, timer):
     wg = WorkloadGen(settings, target, timer=timer)
     wg.run()
+
+
+@celery.task
+def run_pillowfight_via_celery(settings, target, timer):
+    """Run a given workload using pillowfight rather than spring.
+       Method must be declared in the worker module so that when a
+       perfrunner instance is created on a client machine the celery
+       task is declared in scope"""
+    host, port = target.node.split(':')
+
+    pillow = Pillowfight(host=host, port=port, bucket=target.bucket,
+                         password=target.password,
+                         num_items=settings.items,
+                         num_threads=settings.workers,
+                         writes=settings.updates, size=settings.size)
+    pillow.run()
 
 
 class WorkerManager(object):
@@ -92,14 +109,15 @@ class RemoteWorkerManager(object):
                     '&>/tmp/worker_{1}.log &'.format(temp_dir, qname),
                     pty=False)
 
-    def run_workload(self, settings, target_iterator, timer=None):
+    def run_workload(self, settings, target_iterator, timer=None,
+                     run_workload=task_run_workload):
         self.workers = []
         for target in target_iterator:
             logger.info('Running workload generator')
 
             qname = '{}-{}'.format(target.node.split(':')[0], target.bucket)
             queue = Queue(name=qname)
-            worker = task_run_workload.apply_async(
+            worker = run_workload.apply_async(
                 args=(settings, target, timer),
                 queue=queue.name, expires=timer,
             )
