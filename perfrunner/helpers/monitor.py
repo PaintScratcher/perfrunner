@@ -89,16 +89,16 @@ class Monitor(RestHelper):
         logger.info('Monitoring XDCR queues: {}'.format(bucket))
         # MB-14366: XDCR stats endpoint changed in 4.0
         if self.get_version(host_port)[0] >= 4:
-            stats = self.get_go_xdcr_stats(host_port, bucket)
-            if stats:
-                last_value = stats[-1]
-                if last_value:
-                    logger.info('{} = {}'.format(metric, last_value))
-                    continue
-                else:
-                    logger.info('{} reached 0'.format(metric))
-
-        self._wait_for_empty_queues(host_port, bucket, self.XDCR_QUEUES)
+            print "Using new XDCR stats"
+            stats = (self.get_go_xdcr_stats(host_port, bucket)['op']['samples']
+                                                .get(self.XDCR_QUEUES))
+            print stats
+            while stats[-1]:
+                logger.info('{} = {}'.format(self.XDCR_QUEUES, stats[-1]))
+                time.sleep(self.POLLING_INTERVAL)
+            logger.info('{} reached 0'.format(self.XDCR_QUEUES))
+        else:
+            self._wait_for_empty_queues(host_port, bucket, self.XDCR_QUEUES)
 
     def monitor_task(self, host_port, task_type):
         logger.info('Monitoring task: {}'.format(task_type))
