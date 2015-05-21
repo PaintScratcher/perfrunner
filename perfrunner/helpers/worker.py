@@ -57,9 +57,10 @@ class RemoteWorkerManager(object):
 
     RACE_DELAY = 2
 
-    def __init__(self, cluster_spec, test_config):
+    def __init__(self, cluster_spec, test_config, remote):
         self.cluster_spec = cluster_spec
         self.buckets = test_config.buckets or test_config.max_buckets
+        self.remote = remote
 
         self.reuse_worker = test_config.worker_settings.reuse_worker
         self.temp_dir = test_config.worker_settings.worker_dir
@@ -88,6 +89,7 @@ class RemoteWorkerManager(object):
 
                 run('mkdir {}'.format(temp_dir))
                 with cd(temp_dir):
+                    self.remote.install_client_deps()
                     run('git clone {}'.format(REPO))
                 with cd('{}/perfrunner'.format(temp_dir)):
                     run('virtualenv -p python2.7 env')

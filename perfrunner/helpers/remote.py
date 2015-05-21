@@ -51,16 +51,16 @@ class RemoteHelper(object):
         state.output.running = verbose
         state.output.stdout = verbose
 
-        os = cls.detect_os(cluster_spec)
+        os = cls.detect_os(cluster_spec.yield_hostnames().next())
         if os == 'Cygwin':
             return RemoteWindowsHelper(cluster_spec, test_config, os)
         else:
             return RemoteLinuxHelper(cluster_spec, test_config, os)
 
     @staticmethod
-    def detect_os(cluster_spec):
+    def detect_os(host):
         logger.info('Detecting OS')
-        with settings(host_string=cluster_spec.yield_hostnames().next()):
+        with settings(host_string=host):
             os = run('python -c "import platform; print platform.dist()[0]"',
                      pty=False)
         if os:
@@ -541,6 +541,36 @@ class RemoteLinuxHelper(object):
         run('numactl --interleave=all {}/bin/mongod '
             '--dbpath={} --fork --logpath /tmp/mongodb.log'
             .format(self.MONGO_DIR, self.cluster_spec.paths[0]))
+
+    def install_client_deps(self):
+        os = RemoteHelper.detect_os(state.env.host_string)
+        logger.info('Installing client dependencies on {}'.format(state.env.host_string))
+        if 'Ubuntu' in os or 'debian' in os:
+            pkg_manager = 'apt-get'
+            run('apt-get install --yes python-dev')
+        elif 'centos' in os:
+            pkg_manager = 'yum'
+            with settings(warn_only=True):
+                # Check if python2.7 is available and if not install
+                r = run('python2.7 -V')
+            if r.return_code != 0:
+                run('yum groupinstall --assumeyes development')
+                run('yum install --assumeyes zlib-dev openssl-devel sqlite-devel bzip2-devel')
+                run('wget https://www.python.org/ftp/python/2.7.10/Python-2.7.10.tgz')
+                run('tar xf Python-2.7.10.tgz')
+                run('cd Python-2.7.10 && ./configure && make && make altinstall')
+        else:
+            logger.interrupt("Unknown client OS, could not install perfrunner dependencies"
+                             " on {}".format(state.env.host_string))
+
+        run('wget https://bootstrap.pypa.io/get-pip.py')
+        run('python get-pip.py')
+        run('pip install virtualenv')
+        run('{} install -y git'.format(pkg_manager))
+        run('wget http://packages.couchbase.com/clients/c/couchbase-csdk-setup')
+        if 'centos' in os:
+            run('sed -i "s/yum install/yum install --assumeyes/" couchbase-csdk-setup')
+        run('yes | perl couchbase-csdk-setup')
 
     def try_get(self, remote_path, local_path=None):
         try:
