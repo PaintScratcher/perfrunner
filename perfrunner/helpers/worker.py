@@ -3,7 +3,7 @@ from time import sleep
 
 from celery import Celery
 from fabric import state
-from fabric.api import cd, run, local, settings, quiet
+from fabric.api import cd, run, local, settings, quiet, shell_env, path
 from kombu import Queue
 from logger import logger
 from spring.wgen import WorkloadGen
@@ -40,16 +40,19 @@ class RemoteWorkerManager(object):
 
     RACE_DELAY = 2
 
-    def __init__(self, cluster_spec, test_config):
+    def __init__(self, cluster_spec, test_config, remote):
         self.cluster_spec = cluster_spec
         self.buckets = test_config.buckets or test_config.max_buckets
+        self.remote = remote
 
         self.reuse_worker = test_config.worker_settings.reuse_worker
         self.temp_dir = test_config.worker_settings.worker_dir
         self.user, self.password = cluster_spec.client_credentials
         with settings(user=self.user, password=self.password):
-            self.initialize_project()
-            self.start()
+            with shell_env(LD_LIBRARY_PATH='/opt/rh/python27/root/usr/lib64'):
+                with path('/opt/rh/python27/root/usr/bin'):
+                    self.initialize_project()
+                    self.start()
 
     def initialize_project(self):
         for worker, master in zip(self.cluster_spec.workers,
@@ -71,6 +74,7 @@ class RemoteWorkerManager(object):
 
                 run('mkdir {}'.format(temp_dir))
                 with cd(temp_dir):
+                    self.remote.install_client_deps()
                     run('git clone {}'.format(REPO))
                 with cd('{}/perfrunner'.format(temp_dir)):
                     run('virtualenv -p python2.7 env')

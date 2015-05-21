@@ -51,18 +51,18 @@ class RemoteHelper(object):
         state.output.running = verbose
         state.output.stdout = verbose
 
-        os = cls.detect_os(cluster_spec)
+        with settings(host_string=cluster_spec.yield_hostnames().next()):
+            os = cls.detect_os()
         if os == 'Cygwin':
             return RemoteWindowsHelper(cluster_spec, test_config, os)
         else:
             return RemoteLinuxHelper(cluster_spec, test_config, os)
 
     @staticmethod
-    def detect_os(cluster_spec):
+    def detect_os():
         logger.info('Detecting OS')
-        with settings(host_string=cluster_spec.yield_hostnames().next()):
-            os = run('python -c "import platform; print platform.dist()[0]"',
-                     pty=False)
+        os = run('python -c "import platform; print platform.dist()[0]"',
+                 pty=False)
         if os:
             return os
         else:
@@ -514,6 +514,27 @@ class RemoteLinuxHelper(object):
         run('numactl --interleave=all {}/bin/mongod '
             '--dbpath={} --fork --logpath /tmp/mongodb.log'
             .format(self.MONGO_DIR, self.cluster_spec.paths[0]))
+
+    def install_client_deps(self):
+        logger.info('Installing client dependencies.')
+        os = RemoteHelper.detect_os()
+        if 'Ubuntu' in os or 'debian' in os:
+            pkg_manager = 'apt-get'
+            run('apt-get install -y python-dev')
+        elif 'centos' in os:
+            pkg_manager = 'yum'
+            run('wget https://www.softwarecollections.org/en/scls/rhscl/'
+                'python27/epel-6-x86_64/download/rhscl-python27-epel-'
+                '6-x86_64.noarch.rpm')
+            run('yum -y install scl-utils rhscl-python27-*.noarch.rpm python27')
+        run('wget https://bootstrap.pypa.io/get-pip.py')
+        run('python get-pip.py')
+        run('pip install virtualenv')
+        run('{} install -y git'.format(pkg_manager))
+        run('wget http://packages.couchbase.com/clients/c/couchbase-csdk-setup')
+        if 'centos' in os:
+            run('sed -i "s/yum install/yum install -y/" couchbase-csdk-setup')
+        run('yes | perl couchbase-csdk-setup')
 
     def try_get(self, remote_path, local_path=None):
         try:
