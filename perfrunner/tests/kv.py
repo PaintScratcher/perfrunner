@@ -10,13 +10,13 @@ from mc_bin_client.mc_bin_client import MemcachedClient, MemcachedError
 from tap import TAP
 
 from perfrunner.helpers.cbmonitor import with_stats
-from perfrunner.helpers.misc import pretty_dict, uhex
+from perfrunner.helpers.misc import pretty_dict, uhex, log_phase
 from perfrunner.tests import PerfTest
 from perfrunner.workloads.revAB.__main__ import produce_AB
 from perfrunner.workloads.revAB.graph import generate_graph, PersonIterator
 from perfrunner.workloads.tcmalloc import WorkloadGen
 from perfrunner.workloads.pathoGen import PathoGen
-from perfrunner.workloads.pillowfight import Pillowfight
+from perfrunner.workloads.pillowfight import Pillowfight, run_pillowfight_via_celery
 
 
 class KVTest(PerfTest):
@@ -501,15 +501,22 @@ class PillowfightTest(PerfTest):
 
     @with_stats
     def access(self):
-        workload = self.test_config.access_settings
-        for target in self.target_iterator:
-            host, port = target.node.split(':')
-            Pillowfight(host=host, port=port, bucket=target.bucket,
-                        password=self.test_config.bucket.password,
-                        num_items=workload.items,
-                        num_threads=workload.workers,
-                        writes=workload.updates,
-                        size=workload.size).run()
+        settings = self.test_config.access_settings
+        if self.test_config.test_case.use_workers:
+            log_phase('access phase', settings)
+            self.worker_manager.run_workload(settings,
+                                             self.target_iterator,
+                                             run_workload=run_pillowfight_via_celery)
+            self.worker_manager.wait_for_workers()
+        else:
+            for target in self.target_iterator:
+                host, port = target.node.split(':')
+                Pillowfight(host=host, port=port, bucket=target.bucket,
+                            password=self.test_config.bucket.password,
+                            num_items=settings.items,
+                            num_threads=settings.workers,
+                            writes=settings.updates,
+                            size=settings.size).run()
 
     def run(self):
         from_ts, to_ts = self.access()

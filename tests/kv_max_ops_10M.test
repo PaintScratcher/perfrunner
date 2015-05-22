@@ -2,7 +2,6 @@
 test = perfrunner.tests.kv.PillowfightTest
 title = Pillowfight, 50/50 R/W x 10M 1K items
 summary = Pillowfight op/sec, 10M items
-use_workers = 0
 
 [cluster]
 mem_quota = 10240
@@ -20,3 +19,8 @@ workers = 16
 reads = 50
 updates = 50
 size = 1024
+
+
+[worker_settings]
+reuse_workspace = true
+workspace_location = /tmp/pillowfight

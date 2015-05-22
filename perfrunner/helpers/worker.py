@@ -20,7 +20,6 @@ if {'--local', '-C'} & set(sys.argv):
 else:
     celery.config_from_object(celeryremote)
 
-
 @celery.task
 def task_run_workload(settings, target, timer):
     wg = WorkloadGen(settings, target, timer=timer)
@@ -96,14 +95,15 @@ class RemoteWorkerManager(object):
                     '&>/tmp/worker_{1}.log &'.format(temp_dir, qname),
                     pty=False)
 
-    def run_workload(self, settings, target_iterator, timer=None):
+    def run_workload(self, settings, target_iterator, timer=None,
+                     run_workload=task_run_workload):
         self.workers = []
         for target in target_iterator:
             logger.info('Running workload generator')
 
             qname = '{}-{}'.format(target.node.split(':')[0], target.bucket)
             queue = Queue(name=qname)
-            worker = task_run_workload.apply_async(
+            worker = run_workload.apply_async(
                 args=(settings, target, timer),
                 queue=queue.name, expires=timer,
             )

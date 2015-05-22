@@ -2,10 +2,22 @@
 
 """Pillowfight: workload generator from libcouchbase."""
 
+from celery import Celery
 from logger import logger
+from perfrunner.helpers.worker import celery
 
 import subprocess
 
+@celery.task
+def run_pillowfight_via_celery(settings, target, timer):
+    host, port = target.node.split(':')
+
+    pillow = Pillowfight(host=host, port=port, bucket=target.bucket,
+                         password=target.password,
+                         num_items=settings.items,
+                         num_threads=settings.workers,
+                         writes=settings.updates, size=settings.size)
+    pillow.run()
 
 class Pillowfight(object):
 
