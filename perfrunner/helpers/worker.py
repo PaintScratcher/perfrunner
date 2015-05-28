@@ -63,11 +63,11 @@ class RemoteWorkerManager(object):
             default_config = zip(self.cluster_spec.workers,
                         self.cluster_spec.yield_masters())
 
-            if not test_config.load_settings.clients_per_cluster:
+            if not test_config.access_settings.clients_per_cluster:
                 return default_config
 
             clients_per_cluster = [int(clients) for clients in test_config
-                                    .load_settings.clients_per_cluster.split()]
+                                    .access_settings.clients_per_cluster.split()]
 
             if len(clients_per_cluster) != len(cluster_spec.config.items('clusters')):
                 logger.warning("There number of clusters and clusters specified "
@@ -152,7 +152,7 @@ class RemoteWorkerManager(object):
 
                     qname = '{}-{}'.format(target.node.split(':')[0], target.bucket)
                     queue = Queue(name=qname)
-                    worker = task_run_workload.apply_async(
+                    worker = run_workload.apply_async(
                         args=(settings, target, timer),
                         queue=queue.name, expires=timer,
                     )

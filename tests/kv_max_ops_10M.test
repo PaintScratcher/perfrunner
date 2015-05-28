@@ -20,3 +20,4 @@ workers = 100
 reads = 50
 updates = 50
 size = 1024
+clients_per_cluster = 2

@@ -2,11 +2,11 @@
 hermes =
     172.23.100.180:8091
     172.23.100.181:8091
-    172.23.100.182:8091
 
 [clients]
 hosts =
     172.23.100.183
+    172.23.100.182
 credentials = root:couchbase
 
 [storage]
