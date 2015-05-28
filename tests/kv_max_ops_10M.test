@@ -14,7 +14,7 @@ replica_number = 1
 [access]
 items = 10000000
 iterations = 3
-workers = 16
+workers = 100
 # 50/50 read/write
 reads = 50
 updates = 50
