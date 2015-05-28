@@ -563,7 +563,7 @@ class RemoteLinuxHelper(object):
             logger.interrupt("Unknown client OS, could not install perfrunner dependencies"
                              " on {}".format(state.env.host_string))
 
-        run('wget https://bootstrap.pypa.io/get-pip.py')
+        run('wget https://bootstrap.pypa.io/get-pip.py --no-check-certificate')
         run('python get-pip.py')
         run('pip install virtualenv')
         run('{} install -y git'.format(pkg_manager))
