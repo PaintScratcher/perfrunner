@@ -10,6 +10,7 @@ num_buckets = 1
 
 [bucket]
 replica_number = 1
+max_threads = 24
 
 [access]
 items = 10000000
