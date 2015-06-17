@@ -60,47 +60,47 @@ class RemoteWorkerManager(object):
     RACE_DELAY = 2
 
     def __init__(self, cluster_spec, test_config):
-        def client_config_generator(self):
-
-            default_config = zip(self.cluster_spec.workers,
-                                 self.cluster_spec.yield_masters())
-
-            if not test_config.access_settings.clients_per_cluster:
-                return default_config
-
-            clients_per_cluster = [int(clients) for clients in test_config
-                                   .access_settings.clients_per_cluster.split()]
-
-            if len(clients_per_cluster) != len(cluster_spec.config.items('clusters')):
-                logger.warning("There number of clusters and clusters specified "
-                               "in the clients_per_cluster test config do not match - "
-                               "disabling multiple clients per cluster.")
-                return default_config
-            if sum(clients_per_cluster) > len(cluster_spec.workers):
-                logger.warning("More clients_per_cluster specified in test config"
-                               "than are avaliable - disabling multiple clients "
-                               "per cluster.")
-                return default_config
-
-            cluster_config = []
-            workers_not_assigned = self.cluster_spec.workers
-            for master, number_of_clients in zip(self.cluster_spec.yield_masters(),
-                                                 clients_per_cluster):
-                for x in range(number_of_clients):
-                    cluster_config.append((workers_not_assigned.pop(0), master))
-            return cluster_config
-
         self.cluster_spec = cluster_spec
         self.buckets = test_config.buckets or test_config.max_buckets
 
         self.reuse_worker = test_config.worker_settings.reuse_worker
         self.temp_dir = test_config.worker_settings.worker_dir
         self.user, self.password = cluster_spec.client_credentials
-        self.client_config = client_config_generator(self)
-        print self.client_config
+        self.client_config = self.client_config_generator(self)
         with settings(user=self.user, password=self.password):
             self.initialize_project()
             self.start()
+
+    def client_config_generator(self, settings=None):
+
+        default_config = zip(self.cluster_spec.workers,
+                             self.cluster_spec.yield_masters())
+
+        if not hasattr(settings, 'clients_per_cluster') or settings.clients_per_cluster == 'null':
+            return default_config
+
+        clients_per_cluster = [int(clients) for clients in settings
+                               .clients_per_cluster.split()]
+
+        if len(clients_per_cluster) != len(self.cluster_spec.config.items('clusters')):
+            logger.warning("The number of clusters and clusters specified "
+                           "in the clients_per_cluster test config do not match - "
+                           "disabling multiple clients per cluster.")
+            return default_config
+        if sum(clients_per_cluster) > len(self.cluster_spec.workers):
+            logger.warning("More clients_per_cluster specified in test config "
+                           "than are avaliable - disabling multiple clients "
+                           "per cluster.")
+            return default_config
+
+        cluster_config = []
+        workers_not_assigned = self.cluster_spec.workers
+        for master, number_of_clients in zip(self.cluster_spec.yield_masters(),
+                                             clients_per_cluster):
+            for x in range(number_of_clients):
+                cluster_config.append((workers_not_assigned.pop(0), master))
+        return cluster_config
+
 
     def initialize_project(self):
         for worker, master in self.client_config:
@@ -144,15 +144,17 @@ class RemoteWorkerManager(object):
     def run_workload(self, settings, target_iterator, timer=None,
                      run_workload=task_run_workload):
         self.workers = []
+        client_config = self.client_config_generator(settings)
+        logger.info("Client Config: {}".format(client_config))
+        print run_workload
         for target in target_iterator:
-            for client, master in self.client_config:
-                print "Target Node: {}, Client: {}, Master: {}".format(target.node, client, master)
+            for client, master in client_config:
                 if target.node == master:
                     logger.info('Running workload generator')
 
                     qname = '{}-{}'.format(target.node.split(':')[0], target.bucket)
                     queue = Queue(name=qname)
-                    worker = task_run_workload.apply_async(
+                    worker = run_workload.apply_async(
                         args=(settings, target, timer),
                         queue=queue.name, expires=timer,
                     )
