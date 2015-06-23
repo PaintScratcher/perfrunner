@@ -103,13 +103,14 @@ class RemoteWorkerManager(object):
 
 
     def initialize_project(self):
-        for worker, master in self.client_config:
+        for worker in self.cluster_spec.workers:
             state.env.host_string = worker
+            print worker
             run('killall -9 celery', quiet=True)
             for bucket in self.buckets:
                 logger.info('Intializing remote worker environment on {}'
                             .format(worker))
-                qname = '{}-{}'.format(master.split(':')[0], bucket)
+                qname = '{}'.format(worker)
                 temp_dir = '{}-{}'.format(self.temp_dir, qname)
 
                 r = run('test -d {}'.format(temp_dir), warn_only=True, quiet=True)
@@ -129,10 +130,11 @@ class RemoteWorkerManager(object):
                         '--download-cache /tmp/pip -r requirements.txt')
 
     def start(self):
-        for worker, master in self.client_config:
+        for worker in self.cluster_spec.workers:
             state.env.host_string = worker
+            print worker
             for bucket in self.buckets:
-                qname = '{}-{}'.format(master.split(':')[0], bucket)
+                qname = '{}'.format(worker)
                 logger.info('Starting remote Celery worker: {}'.format(qname))
 
                 temp_dir = '{}-{}/perfrunner'.format(self.temp_dir, qname)
@@ -150,9 +152,10 @@ class RemoteWorkerManager(object):
         for target in target_iterator:
             for client, master in client_config:
                 if target.node == master:
+                    print client
                     logger.info('Running workload generator')
 
-                    qname = '{}-{}'.format(target.node.split(':')[0], target.bucket)
+                    qname = '{}'.format(client)
                     queue = Queue(name=qname)
                     worker = run_workload.apply_async(
                         args=(settings, target, timer),
@@ -166,7 +169,7 @@ class RemoteWorkerManager(object):
             worker.wait()
 
     def terminate(self):
-        for worker, master in self.client_config:
+        for worker in self.cluster_spec.workers:
             state.env.host_string = worker
             for bucket in self.buckets:
                 with settings(user=self.user, password=self.password):
@@ -174,7 +177,7 @@ class RemoteWorkerManager(object):
                     run('killall -9 celery', quiet=True)
 
                     logger.info('Cleaning up remote worker environment')
-                    qname = '{}-{}'.format(master.split(':')[0], bucket)
+                    qname = '{}'.format(worker)
                     temp_dir = '{}-{}'.format(self.temp_dir, qname)
                     if self.reuse_worker == 'false':
                         run('rm -fr {}'.format(temp_dir))
